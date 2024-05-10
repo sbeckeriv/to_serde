@@ -1,0 +1,14 @@
+{
+  "name": "to_serde",
+  "version": "0.1.0",
+  "files": [
+    "to_serde_bg.wasm",
+    "to_serde.js",
+    "to_serde.d.ts"
+  ],
+  "module": "to_serde.js",
+  "types": "to_serde.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
