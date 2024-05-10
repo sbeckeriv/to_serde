@@ -85,7 +85,7 @@ pub mod serde_xml {
             } else {
                 let struct_name = format!("{}Element", self.name.to_pascal_case());
                 let mut st = format!(
-                    "\npub struct {struct_name} {{
+                    "\n#[derive(Debug, Deserialize)]\npub struct {struct_name} {{
   #[serde(rename = \"$value\")]
   content_xml: {},\n",
                     self.value_type
@@ -128,7 +128,10 @@ pub mod serde_xml {
         pub fn as_serde(&self) -> String {
             let mut new_structs = Vec::new();
             let mut other_structs = Vec::new();
-            let mut el = format!("\npub struct {} {{\n", self.name.to_pascal_case());
+            let mut el = format!(
+                "\n#[derive(Debug, Deserialize)]\npub struct {} {{\n",
+                self.name.to_pascal_case()
+            );
             let mod_name = self.name.to_snake_case();
             for item in self.items.iter() {
                 let (v, s) = item.as_serde(&Some(mod_name.clone()));
@@ -155,7 +158,7 @@ pub mod serde_xml {
                 .collect::<Vec<_>>();
             if !new_structs.is_empty() {
                 el.push_str(&format!(
-                    "\npub mod {mod_name}{{\n{}\n}}",
+                    "\npub mod {mod_name}{{\nuse super::*;\n{}\n}}",
                     new_structs.join("\n\n")
                 ));
             }
