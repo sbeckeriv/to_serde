@@ -17,7 +17,6 @@
 
         async function convertXml() {
             await init();
-            debugger;
             const xmlInput = document.getElementById('xmlInput').value;
             const rustOutput = parse_xml(xmlInput);
             document.getElementById('rustOutput').textContent = rustOutput;
