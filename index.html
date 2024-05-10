@@ -4,11 +4,52 @@
 <head>
     <meta charset="utf-8">
     <title>to Rust Structs</title>
+    <style>
+    .container {
+      display: flex;
+    }
+
+    .textarea {
+      flex: 1;
+      margin: 10px;
+      padding: 10px;
+      resize: none;
+    }
+  </style>
 </head>
 
 <body>
     <h1>XML to Rust Structs</h1>
-    <textarea id="xmlInput" rows="10" cols="50"></textarea>
+    <div class="container">
+    <textarea id="xmlInput" class="textarea" rows="10" cols="50"></textarea>
+    <textarea class="textarea">
+    // Custom deserializers 
+    // update the stucts to options and deserialize_with
+    // #[serde(deserialize_with = "url_deserializer")]
+    // id: Option<url::Url>,
+    // #[serde(default, deserialize_with = "optional_datetime_deserializer")]
+    // updated: Option<DateTime<FixedOffset>>,
+fn url_deserializer<'de, D>(deserializer: D) -> Result<Option<Url>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    s.map(|string| Url::parse(&string).map_err(serde::de::Error::custom))
+        .transpose()
+}
+
+// Update to match the the date time generated
+fn optional_datetime_deserializer<'de, D>(
+    deserializer: D,
+) -> Result<Option<DateTime<FixedOffset>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    s.map(|string| DateTime::parse_from_rfc3339(&string).map_err(serde::de::Error::custom))
+        .transpose()
+}</textarea>
+    </div>
     <button id="convertButton">Convert</button>
     <pre id="rustOutput"></pre>
 
