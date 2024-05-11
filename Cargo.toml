@@ -19,6 +19,7 @@ xml-rs = "*"
 chrono = "0.4"
 url = "2.2"
 Inflector = "*"
+itertools = "*"
 
 
 [[example]]

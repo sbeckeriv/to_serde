@@ -1,11 +1,16 @@
 pub mod serde_xml {
     use inflector::Inflector;
+    use itertools::Itertools;
     use serde_xml_rs::EventReader;
-    use std::{collections::HashMap, fmt::Display, process::exit};
+    use std::{
+        collections::{HashMap},
+        fmt::Display,
+        process::exit,
+    };
     use xml::reader::XmlEvent::EndDocument;
 
-    fn guess_type(input: &str) -> ValueTypes {
-        if let Ok(_) = input.parse::<i64>() {
+    fn guess_type(input: &str) -> ValueTypeOption {
+        let val = if let Ok(_) = input.parse::<i64>() {
             ValueTypes::Int
         } else if let Ok(_) = input.parse::<f64>() {
             ValueTypes::Float
@@ -19,6 +24,36 @@ pub mod serde_xml {
             ValueTypes::Url
         } else {
             ValueTypes::String
+        };
+        ValueTypeOption::Required(val)
+    }
+    #[derive(Debug, Clone)]
+    enum ValueTypeOption {
+        Optional(ValueTypes),
+        Required(ValueTypes),
+    }
+    impl ValueTypeOption {
+        pub fn optional(&mut self) {
+            *self = match self {
+                ValueTypeOption::Optional(value) => Self::Optional(value.clone()),
+                ValueTypeOption::Required(value) => Self::Optional(value.clone()),
+            };
+        }
+    }
+
+    impl Display for ValueTypeOption {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let val = match self {
+                ValueTypeOption::Optional(value) if value == &ValueTypes::None => value.to_string(),
+                ValueTypeOption::Optional(value) => format!("Option<{value}>"),
+                ValueTypeOption::Required(value) => value.to_string(),
+            };
+            write!(f, "{val}")
+        }
+    }
+    impl Default for ValueTypeOption {
+        fn default() -> Self {
+            ValueTypeOption::Required(ValueTypes::default())
         }
     }
     #[derive(Debug, Clone, PartialEq)]
@@ -52,16 +87,62 @@ pub mod serde_xml {
     #[derive(Debug, Default, Clone)]
     pub struct Item {
         name: String,
-        value_type: ValueTypes,
-        optional: bool,
-        attributes: HashMap<String, ValueTypes>,
+        value_type: ValueTypeOption,
+        attributes: HashMap<String, ValueTypeOption>,
+    }
+
+    impl Eq for Item {}
+
+    impl Ord for Item {
+        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+            self.name.cmp(&other.name)
+        }
     }
     impl PartialEq for Item {
         fn eq(&self, other: &Self) -> bool {
             self.name == other.name
         }
     }
+
+    impl PartialOrd for Item {
+        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            self.name.partial_cmp(&other.name)
+        }
+    }
+    fn merge_attributes(
+        original: &HashMap<String, ValueTypeOption>,
+        other: &HashMap<String, ValueTypeOption>,
+    ) -> HashMap<String, ValueTypeOption> {
+        let mut new_self = original.clone();
+        new_self.extend(other.clone());
+        // if the key is not in the other hash map make it optional. this was the best i could figure out.
+        // without ownership problems around the use of keys()
+        for k in original.keys() {
+            if !other.contains_key(k) {
+                if let Some(mut v) = new_self.remove(k) {
+                    v.optional();
+                    new_self.insert(k.to_string(), v);
+                }
+            }
+        }
+
+        for k in other.keys() {
+            if !original.contains_key(k) {
+                if let Some(mut v) = new_self.remove(k) {
+                    v.optional();
+                    new_self.insert(k.to_string(), v);
+                }
+            }
+        }
+        new_self
+    }
     impl Item {
+        pub fn merge(&self, other: &Item) -> Item {
+            let mut new_self = self.clone();
+            new_self.attributes = merge_attributes(&self.attributes, &other.attributes);
+            new_self
+        }
+
         // (struct line, new struct)
         // rename forbidden names type,struct
         pub fn as_serde(&self, mod_name: &Option<String>) -> (String, Option<String>) {
@@ -75,11 +156,7 @@ pub mod serde_xml {
                 format!("{mod_name}{}Element", self.name.to_pascal_case())
             };
 
-            let val = if self.optional {
-                format!("Option<{val_name}>")
-            } else {
-                val_name.clone()
-            };
+            let val = val_name;
             let new_struct = if self.attributes.is_empty() {
                 None
             } else {
@@ -103,9 +180,9 @@ pub mod serde_xml {
     #[derive(Debug, Default, Clone)]
     pub struct XmlElement {
         name: String,
-        attributes: HashMap<String, ValueTypes>,
+        attributes: HashMap<String, ValueTypeOption>,
         items: Vec<Item>,
-        value_type: ValueTypes,
+        value_type: ValueTypeOption,
         elements: Vec<XmlElement>,
     }
     pub fn name_check(name: &str) -> String {
@@ -117,11 +194,30 @@ pub mod serde_xml {
     impl XmlElement {
         pub fn merge(&self, other: &XmlElement) -> Self {
             let mut new_self = self.clone();
-            // rewrite attributes to handle missing as option wrapped
-            new_self.attributes.extend(other.attributes.clone());
+
+            new_self.attributes = merge_attributes(&self.attributes, &other.attributes);
+
             new_self.items.append(&mut other.items.clone());
-            new_self.items.sort_by_key(|s| s.name.clone());
-            new_self.items.dedup();
+            new_self.items.sort();
+            new_self.items = new_self
+                .items
+                .iter()
+                .group_by(|s| s.name.clone())
+                .into_iter()
+                .map(|(_, data)| {
+                    let mut data = data.collect::<Vec<_>>();
+                    let mut first = data.remove(0).clone();
+                    if data.len() == 0 {
+                        first
+                    } else {
+                        data.iter().for_each(|i| {
+                            first = first.merge(&i);
+                        });
+                        first
+                    }
+                })
+                .collect::<Vec<_>>();
+
             new_self.elements.append(&mut other.elements.clone());
             new_self
         }

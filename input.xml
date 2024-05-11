@@ -17,11 +17,11 @@
     <content type="html">A look at a dedicated Wikipedia browser for the Linux desktop</content>
   </entry>
   <entry xml:base="https://kagi.com/api/v1/smallweb/feed">
-    <title type="text">Building Slack</title>
+    <title >Building Slack</title>
     <id>https://www.allenpike.com/2024/building-slack</id>
     <updated>2024-05-06T21:11:05+00:00</updated>
     <published>2024-05-06T21:11:05+00:00</published>
-    <link href="https://www.allenpike.com/2024/building-slack" />
+    <link />
     <author>
       <name>Allen Pike</name>
     </author>
