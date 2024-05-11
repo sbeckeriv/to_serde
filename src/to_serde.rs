@@ -2,11 +2,7 @@ pub mod serde_xml {
     use inflector::Inflector;
     use itertools::Itertools;
     use serde_xml_rs::EventReader;
-    use std::{
-        collections::{HashMap},
-        fmt::Display,
-        process::exit,
-    };
+    use std::{collections::HashMap, fmt::Display, process::exit};
     use xml::reader::XmlEvent::EndDocument;
 
     fn guess_type(input: &str) -> ValueTypeOption {
@@ -56,8 +52,7 @@ pub mod serde_xml {
             ValueTypeOption::Required(ValueTypes::default())
         }
     }
-    #[derive(Debug, Clone, PartialEq)]
-    #[derive(Default)]
+    #[derive(Debug, Clone, PartialEq, Default)]
     enum ValueTypes {
         #[default]
         None,
@@ -75,13 +70,18 @@ pub mod serde_xml {
                 ValueTypes::Int => "u64",
                 ValueTypes::Float => "f64",
                 ValueTypes::Url => "url::Url",
-                ValueTypes::Timestamp(str) if *str == "DateTime".to_string() => "NaiveDateTime",
-                ValueTypes::Timestamp(_) => "DateTime<FixedOffset>",
+                ValueTypes::Timestamp(str) => {
+                    if str.as_str() == "DateTime" {
+                        "NaiveDateTime"
+                    } else {
+                        "DateTime<FixedOffset>"
+                    }
+                }
             };
             write!(f, "{val}")
         }
     }
-    
+
     #[derive(Debug, Default, Clone)]
     pub struct Item {
         name: String,
@@ -245,10 +245,7 @@ pub mod serde_xml {
             }
             el.push_str("\n}\n");
             // check for
-            let new_structs = new_structs
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>();
+            let new_structs = new_structs.into_iter().flatten().collect::<Vec<_>>();
             if !new_structs.is_empty() {
                 el.push_str(&format!(
                     "\npub mod {mod_name}{{\nuse super::*;\n{}\n}}",
@@ -256,10 +253,7 @@ pub mod serde_xml {
                 ));
             }
 
-            let other_structs = other_structs
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>();
+            let other_structs = other_structs.into_iter().flatten().collect::<Vec<_>>();
 
             if !other_structs.is_empty() {
                 el.push_str(&other_structs.join("\n\n").to_string());
@@ -287,8 +281,10 @@ pub mod serde_xml {
                     attributes,
                     namespace: _namespace,
                 } => {
-                    let mut active = XmlElement::default();
-                    active.name = name.local_name;
+                    let mut active = XmlElement {
+                        name: name.local_name,
+                        ..Default::default()
+                    };
                     let mut att_list = HashMap::new();
                     for att in attributes.iter() {
                         att_list.insert(att.name.to_string(), guess_type(&att.value));
@@ -305,10 +301,11 @@ pub mod serde_xml {
                     }
                     if let Some(e) = open.last_mut() {
                         if cur.elements.is_empty() && cur.items.is_empty() {
-                            let mut item = Item::default();
-                            item.name = cur.name;
-                            item.attributes = cur.attributes;
-                            item.value_type = cur.value_type;
+                            let item = Item {
+                                name: cur.name,
+                                attributes: cur.attributes,
+                                value_type: cur.value_type,
+                            };
                             e.items.push(item);
                         } else {
                             e.elements.push(cur);
