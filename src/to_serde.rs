@@ -10,17 +10,17 @@ pub mod serde_xml {
     use xml::reader::XmlEvent::EndDocument;
 
     fn guess_type(input: &str) -> ValueTypeOption {
-        let val = if let Ok(_) = input.parse::<i64>() {
+        let val = if input.parse::<i64>().is_ok() {
             ValueTypes::Int
-        } else if let Ok(_) = input.parse::<f64>() {
+        } else if input.parse::<f64>().is_ok() {
             ValueTypes::Float
-        } else if let Ok(_) = chrono::NaiveDateTime::parse_from_str(input, "%Y-%m-%d %H:%M:%S") {
+        } else if chrono::NaiveDateTime::parse_from_str(input, "%Y-%m-%d %H:%M:%S").is_ok() {
             ValueTypes::Timestamp("DateTime".into())
-        } else if let Ok(_) = chrono::DateTime::parse_from_rfc3339(input) {
+        } else if chrono::DateTime::parse_from_rfc3339(input).is_ok() {
             ValueTypes::Timestamp("rfc3339".into())
-        } else if let Ok(_) = chrono::DateTime::parse_from_rfc2822(input) {
+        } else if chrono::DateTime::parse_from_rfc2822(input).is_ok() {
             ValueTypes::Timestamp("rfc282".into())
-        } else if let Ok(_) = url::Url::parse(input) {
+        } else if url::Url::parse(input).is_ok() {
             ValueTypes::Url
         } else {
             ValueTypes::String
@@ -57,7 +57,9 @@ pub mod serde_xml {
         }
     }
     #[derive(Debug, Clone, PartialEq)]
+    #[derive(Default)]
     enum ValueTypes {
+        #[default]
         None,
         String,
         Int,
@@ -79,11 +81,7 @@ pub mod serde_xml {
             write!(f, "{val}")
         }
     }
-    impl Default for ValueTypes {
-        fn default() -> Self {
-            ValueTypes::None
-        }
-    }
+    
     #[derive(Debug, Default, Clone)]
     pub struct Item {
         name: String,
@@ -207,11 +205,11 @@ pub mod serde_xml {
                 .map(|(_, data)| {
                     let mut data = data.collect::<Vec<_>>();
                     let mut first = data.remove(0).clone();
-                    if data.len() == 0 {
+                    if data.is_empty() {
                         first
                     } else {
                         data.iter().for_each(|i| {
-                            first = first.merge(&i);
+                            first = first.merge(i);
                         });
                         first
                     }
@@ -237,20 +235,19 @@ pub mod serde_xml {
             if let Some(els) = self.elements.first() {
                 let mut els = els.clone();
                 for e in self.elements.iter().skip(1) {
-                    els = els.merge(&e);
+                    els = els.merge(e);
                 }
 
                 let name = els.name.to_pascal_case();
                 let snake = &name.to_snake_case();
-                el.push_str(&format!("  {}: Vec<{name}>,\n", name_check(&snake)));
+                el.push_str(&format!("  {}: Vec<{name}>,\n", name_check(snake)));
                 other_structs.push(Some(els.as_serde()));
             }
             el.push_str("\n}\n");
             // check for
             let new_structs = new_structs
                 .into_iter()
-                .filter(|s| s.is_some())
-                .map(|s| s.unwrap())
+                .flatten()
                 .collect::<Vec<_>>();
             if !new_structs.is_empty() {
                 el.push_str(&format!(
@@ -261,12 +258,11 @@ pub mod serde_xml {
 
             let other_structs = other_structs
                 .into_iter()
-                .filter(|s| s.is_some())
-                .map(|s| s.unwrap())
+                .flatten()
                 .collect::<Vec<_>>();
 
             if !other_structs.is_empty() {
-                el.push_str(&format!("{}", other_structs.join("\n\n")));
+                el.push_str(&other_structs.join("\n\n").to_string());
             }
             el
         }
@@ -304,7 +300,7 @@ pub mod serde_xml {
                 xml::reader::XmlEvent::EndElement { name } => {
                     let cur = open.pop().expect("close found but nothing in the queue!");
                     if cur.name != name.local_name {
-                        eprintln!("Stack error named {} did not match top of the stack {}  \nrest:{open:?}", name.to_string(), cur.name);
+                        eprintln!("Stack error named {} did not match top of the stack {}  \nrest:{open:?}", name, cur.name);
                         exit(2);
                     }
                     if let Some(e) = open.last_mut() {
@@ -327,6 +323,6 @@ pub mod serde_xml {
             eprintln!("The stack still has elements {open:?}");
             exit(2)
         }
-        format!("{}", root.elements.first().unwrap().as_serde())
+        root.elements.first().unwrap().as_serde().to_string()
     }
 }
